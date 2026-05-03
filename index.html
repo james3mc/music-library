@@ -29,7 +29,16 @@ select:focus { border-color: #7F77DD; outline: none; }
 .stats span { font-weight: 500; color: #1a1a1a; }
 .results { background: #fff; border: 0.5px solid #e0e0d8; border-radius: 12px; overflow: hidden; }
 .header-row { display: grid; grid-template-columns: 1fr 1fr 1fr 110px 54px 55px 50px; padding: 8px 14px; border-bottom: 0.5px solid #e0e0d8; background: #fafaf8; }
-.header-row span { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.header-row span {
+  font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase;
+  letter-spacing: 0.05em; cursor: pointer; user-select: none; padding-right: 14px;
+  position: relative; white-space: nowrap;
+}
+.header-row span:hover { color: #333; }
+.header-row span.sorted-asc::after { content: " \2191"; color: #7F77DD; }
+.header-row span.sorted-desc::after { content: " \2193"; color: #7F77DD; }
+.header-row span.sorted-asc,
+.header-row span.sorted-desc { color: #534AB7; }
 .result-item { display: grid; grid-template-columns: 1fr 1fr 1fr 110px 54px 55px 50px; padding: 9px 14px; border-bottom: 0.5px solid #f0f0e8; align-items: center; }
 .result-item:last-child { border-bottom: none; }
 .result-item:hover { background: #fafaf8; }
@@ -73,16 +82,6 @@ mark { background: #EEEDFE; color: #3C3489; padding: 0 2px; border-radius: 3px; 
       <option value="album">Album only</option>
     </select>
   </div>
-  <div class="filter-group">
-    <label>Sort by</label>
-    <select id="sortMode">
-      <option value="">Relevance</option>
-      <option value="artist">Artist A-Z</option>
-      <option value="title">Title A-Z</option>
-      <option value="year_asc">Year (oldest first)</option>
-      <option value="year_desc">Year (newest first)</option>
-    </select>
-  </div>
 </div>
 <div class="active-filters" id="activeTags"></div>
 <p class="stats" id="statsLine"></p>
@@ -99,32 +98,34 @@ document.getElementById('totalCount').textContent = SONGS.length.toLocaleString(
 
 var genreSelect = document.getElementById('genreFilter');
 GENRES.forEach(function(g) {
-  var o = document.createElement('option');
-  o.value = g; o.textContent = g;
+  var o = document.createElement('option'); o.value = g; o.textContent = g;
   genreSelect.appendChild(o);
 });
 
 var yearSelect = document.getElementById('yearFilter');
 YEARS.slice().reverse().forEach(function(y) {
-  var o = document.createElement('option');
-  o.value = y; o.textContent = y;
+  var o = document.createElement('option'); o.value = y; o.textContent = y;
   yearSelect.appendChild(o);
 });
 
 var input = document.getElementById('searchInput');
 var filterMode = document.getElementById('filterMode');
-var sortMode = document.getElementById('sortMode');
 var resultsBox = document.getElementById('resultsBox');
 var statsLine = document.getElementById('statsLine');
 var activeTags = document.getElementById('activeTags');
 var MAX = 300;
+
+var sortCol = null;
+var sortDir = 'asc';
+
+var COL_MAP = { artist: 0, title: 1, album: 2, genre: 3, year: 4, length: 5, bitrate: 6 };
 
 function escHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeRegex(s) {
-  return s.replace(/[\-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  return s.replace(/[-[\]{}()*+?.,\^$|#\s]/g, '\$&');
 }
 
 function highlightTerms(text, terms) {
@@ -132,8 +133,7 @@ function highlightTerms(text, terms) {
   var result = escHtml(text);
   terms.forEach(function(t) {
     if (!t) return;
-    var pattern = escapeRegex(t);
-    var re = new RegExp(pattern, 'gi');
+    var re = new RegExp(escapeRegex(t), 'gi');
     result = result.replace(re, function(m) { return '<mark>' + m + '</mark>'; });
   });
   return result;
@@ -143,42 +143,48 @@ var yearPattern = /^(1[4-9][0-9][0-9]|20[0-9][0-9])$/;
 
 function parseQuery(raw) {
   var tokens = raw.toLowerCase().trim().split(/\s+/).filter(function(t) { return t.length > 0; });
-  var yearTokens = tokens.filter(function(t) { return yearPattern.test(t); });
-  var textTokens = tokens.filter(function(t) { return !yearPattern.test(t); });
-  return { yearTokens: yearTokens, textTokens: textTokens };
+  return {
+    yearTokens: tokens.filter(function(t) { return yearPattern.test(t); }),
+    textTokens: tokens.filter(function(t) { return !yearPattern.test(t); })
+  };
 }
 
 function updateActiveTags() {
   var genre = genreSelect.value;
   var year = yearSelect.value;
   var html = '';
-  if (genre) {
-    html += '<span class="filter-tag">Genre: ' + escHtml(genre) + '<button data-clear="genre" title="Remove">x</button></span>';
-  }
-  if (year) {
-    html += '<span class="filter-tag">Year: ' + escHtml(year) + '<button data-clear="year" title="Remove">x</button></span>';
-  }
+  if (genre) html += '<span class="filter-tag">Genre: ' + escHtml(genre) + '<button data-clear="genre" title="Remove">x</button></span>';
+  if (year) html += '<span class="filter-tag">Year: ' + escHtml(year) + '<button data-clear="year" title="Remove">x</button></span>';
   activeTags.innerHTML = html;
   activeTags.querySelectorAll('button[data-clear]').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var target = btn.getAttribute('data-clear');
-      if (target === 'genre') genreSelect.value = '';
-      if (target === 'year') yearSelect.value = '';
+      if (btn.getAttribute('data-clear') === 'genre') genreSelect.value = '';
+      else yearSelect.value = '';
       search();
     });
   });
 }
 
-function clearAll() {
+function updateHeaderArrows() {
+  var headers = document.querySelectorAll('.header-row span[data-col]');
+  headers.forEach(function(h) {
+    h.classList.remove('sorted-asc', 'sorted-desc');
+    if (h.getAttribute('data-col') === sortCol) {
+      h.classList.add(sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
+}
+
+document.getElementById('clearBtn').addEventListener('click', function() {
   input.value = '';
   genreSelect.value = '';
   yearSelect.value = '';
   filterMode.value = 'all';
-  sortMode.value = '';
+  sortCol = null;
+  sortDir = 'asc';
+  updateHeaderArrows();
   search();
-}
-
-document.getElementById('clearBtn').addEventListener('click', clearAll);
+});
 
 function search() {
   updateActiveTags();
@@ -186,7 +192,6 @@ function search() {
   var mode = filterMode.value;
   var genreFilter = genreSelect.value;
   var yearFilter = yearSelect.value;
-  var sort = sortMode.value;
   var parsed = parseQuery(raw);
   var yearTokens = parsed.yearTokens;
   var textTokens = parsed.textTokens;
@@ -211,25 +216,28 @@ function search() {
       var found = false;
       if (mode === 'all') {
         found = (artist && artist.toLowerCase().indexOf(tt) >= 0) ||
-                (title && title.toLowerCase().indexOf(tt) >= 0) ||
-                (album && album.toLowerCase().indexOf(tt) >= 0) ||
-                (genre && genre.toLowerCase().indexOf(tt) >= 0);
-      } else if (mode === 'artist') {
-        found = artist && artist.toLowerCase().indexOf(tt) >= 0;
-      } else if (mode === 'title') {
-        found = title && title.toLowerCase().indexOf(tt) >= 0;
-      } else if (mode === 'album') {
-        found = album && album.toLowerCase().indexOf(tt) >= 0;
-      }
+                (title  && title.toLowerCase().indexOf(tt)  >= 0) ||
+                (album  && album.toLowerCase().indexOf(tt)  >= 0) ||
+                (genre  && genre.toLowerCase().indexOf(tt)  >= 0);
+      } else if (mode === 'artist') { found = artist && artist.toLowerCase().indexOf(tt) >= 0; }
+      else if (mode === 'title')    { found = title  && title.toLowerCase().indexOf(tt)  >= 0; }
+      else if (mode === 'album')    { found = album  && album.toLowerCase().indexOf(tt)  >= 0; }
       if (!found) return false;
     }
     return true;
   });
 
-  if (sort === 'artist') matches.sort(function(a,b) { return (a[0]||'').localeCompare(b[0]||''); });
-  else if (sort === 'title') matches.sort(function(a,b) { return (a[1]||'').localeCompare(b[1]||''); });
-  else if (sort === 'year_asc') matches.sort(function(a,b) { return (a[4]||'9999').localeCompare(b[4]||'9999'); });
-  else if (sort === 'year_desc') matches.sort(function(a,b) { return (b[4]||'0000').localeCompare(a[4]||'0000'); });
+  if (sortCol !== null) {
+    var idx = COL_MAP[sortCol];
+    matches.sort(function(a, b) {
+      var av = a[idx] || '';
+      var bv = b[idx] || '';
+      var cmp = (idx === 4 || idx === 5 || idx === 6)
+        ? av.localeCompare(bv, undefined, { numeric: true })
+        : av.localeCompare(bv);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
 
   var total = matches.length;
   if (total === 0) {
@@ -238,35 +246,67 @@ function search() {
     return;
   }
 
-  statsLine.innerHTML = '<span>' + total.toLocaleString() + '</span> result' + (total !== 1 ? 's' : '') + (total > MAX ? ' — showing first ' + MAX : '');
+  statsLine.innerHTML = '<span>' + total.toLocaleString() + '</span> result' + (total !== 1 ? 's' : '') +
+    (total > MAX ? ' — showing first ' + MAX : '');
 
   var shown = matches.slice(0, MAX);
-  var html = '<div class="header-row"><span>Artist</span><span>Title</span><span class="col-album">Album</span><span class="col-genre">Genre</span><span class="col-year">Year</span><span class="col-len">Length</span><span class="col-br">kbps</span></div>';
 
+  var cols = [
+    { label: 'Artist',  key: 'artist'  },
+    { label: 'Title',   key: 'title'   },
+    { label: 'Album',   key: 'album',  cls: 'col-album'  },
+    { label: 'Genre',   key: 'genre',  cls: 'col-genre'  },
+    { label: 'Year',    key: 'year',   cls: 'col-year'   },
+    { label: 'Length',  key: 'length', cls: 'col-len'    },
+    { label: 'kbps',    key: 'bitrate',cls: 'col-br'     }
+  ];
+
+  var headerHtml = '<div class="header-row">';
+  cols.forEach(function(c) {
+    var cls = c.cls || '';
+    var sorted = sortCol === c.key ? (sortDir === 'asc' ? ' sorted-asc' : ' sorted-desc') : '';
+    headerHtml += '<span data-col="' + c.key + '" class="' + cls + sorted + '">' + c.label + '</span>';
+  });
+  headerHtml += '</div>';
+
+  var rowsHtml = '';
   shown.forEach(function(s) {
     var artist = s[0], title = s[1], album = s[2], genre = s[3], year = s[4], len = s[5], br = s[6];
-    html += '<div class="result-item">'
-      + '<span class="cell">' + highlightTerms(artist, textTokens) + '</span>'
-      + '<span class="cell">' + highlightTerms(title, textTokens) + '</span>'
-      + '<span class="cell muted col-album">' + highlightTerms(album, textTokens) + '</span>'
-      + '<span class="cell col-genre">' + (genre ? '<span class="genre-badge">' + escHtml(genre) + '</span>' : '') + '</span>'
-      + '<span class="cell center col-year">' + (year ? '<span class="year-badge">' + escHtml(year) + '</span>' : '') + '</span>'
+    rowsHtml += '<div class="result-item">'
+      + '<span class="cell">'                      + highlightTerms(artist, textTokens) + '</span>'
+      + '<span class="cell">'                      + highlightTerms(title,  textTokens) + '</span>'
+      + '<span class="cell muted col-album">'      + highlightTerms(album,  textTokens) + '</span>'
+      + '<span class="cell col-genre">'            + (genre ? '<span class="genre-badge">' + escHtml(genre) + '</span>' : '') + '</span>'
+      + '<span class="cell center col-year">'      + (year  ? '<span class="year-badge">'  + escHtml(year)  + '</span>' : '') + '</span>'
       + '<span class="cell muted center col-len">' + escHtml(len) + '</span>'
-      + '<span class="cell muted center col-br">' + escHtml(br) + '</span>'
+      + '<span class="cell muted center col-br">'  + escHtml(br)  + '</span>'
       + '</div>';
   });
 
   if (total > MAX) {
-    html += '<div class="more-notice">+ ' + (total - MAX).toLocaleString() + ' more — refine your search to narrow results</div>';
+    rowsHtml += '<div class="more-notice">+ ' + (total - MAX).toLocaleString() + ' more — refine your search to narrow results</div>';
   }
-  resultsBox.innerHTML = html;
+
+  resultsBox.innerHTML = headerHtml + rowsHtml;
+
+  resultsBox.querySelectorAll('.header-row span[data-col]').forEach(function(h) {
+    h.addEventListener('click', function() {
+      var col = h.getAttribute('data-col');
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = 'asc';
+      }
+      search();
+    });
+  });
 }
 
 input.addEventListener('input', search);
 filterMode.addEventListener('change', search);
 genreSelect.addEventListener('change', search);
 yearSelect.addEventListener('change', search);
-sortMode.addEventListener('change', search);
 </script>
 </body>
 </html>
