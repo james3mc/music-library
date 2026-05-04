@@ -40,6 +40,7 @@ select:disabled { background: #f5f5f0; color: #bbb; cursor: default; border-colo
 .header-row span.sorted-desc::after { content: " \2193"; color: #7F77DD; }
 .header-row span.sorted-asc, .header-row span.sorted-desc { color: #534AB7; }
 .cell { font-size: 13px; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell.muted  { color: #888; }
 .cell.center { text-align: center; padding-right: 0; }
 mark { background: #EEEDFE; color: #3C3489; padding: 0 2px; border-radius: 3px; }
@@ -242,12 +243,18 @@ function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 function escapeRegex(s){ return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&'); }
 function highlightTerms(text,terms){
   if (!terms.length||!text) return escHtml(text||'');
-  var r=escHtml(text);
-  terms.forEach(function(t){
-    if (!t) return;
-    r=r.replace(new RegExp(escapeRegex(t),'gi'),function(m){ return '<mark>'+m+'</mark>'; });
-  });
-  return r;
+  var filtered=terms.filter(function(t){ return t.length>0; });
+  if (!filtered.length) return escHtml(text);
+  var pattern=filtered.map(escapeRegex).join('|');
+  var re=new RegExp(pattern,'gi');
+  var result='', last=0, m;
+  while ((m=re.exec(text))!==null){
+    result+=escHtml(text.slice(last,m.index));
+    result+='<mark>'+escHtml(m[0])+'</mark>';
+    last=m.index+m[0].length;
+  }
+  result+=escHtml(text.slice(last));
+  return result;
 }
 
 var yearPattern=/^(1[4-9][0-9][0-9]|20[0-9][0-9])$/;
@@ -409,7 +416,7 @@ function search(){
     var missingHtml=missingSelect.value&&mp.length?'&nbsp;<span class="missing-tag">missing: '+mp.join(', ')+'</span>':'';
     rowsHtml+='<div class="result-item">'
       +'<span class="cell">'+highlightTerms(artist,textTokens)+'</span>'
-      +'<span class="cell">'+highlightTerms(title,textTokens)+missingHtml+'</span>'
+      +'<span class="cell title-cell" title="'+escHtml(title)+'">'+highlightTerms(title,textTokens)+missingHtml+'</span>'
       +'<span class="cell muted col-album">'+highlightTerms(album,textTokens)+'</span>'
       +'<span class="cell muted center col-track">'+escHtml(track)+'</span>'
       +'<span class="cell col-genre">'+(genre?'<span class="genre-badge">'+escHtml(genre)+'</span>':'')+'</span>'
