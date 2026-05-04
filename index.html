@@ -107,7 +107,7 @@ hr.filter-divider { border: none; border-top: 0.5px solid var(--border); margin:
 </head>
 <body>
 <div class="title-row">
-  <h1>Music Catalog <span style="font-size:13px; font-weight:400; color: var(--text-sub, #666);">v1.9 &nbsp;·&nbsp; 05 May 2026 00:17</span></h1>
+  <h1>Music Catalog <span style="font-size:13px; font-weight:400; color: var(--text-sub, #666);">v1.14 &nbsp;·&nbsp; 05 May 2026 00:42</span></h1>
   <label class="theme-toggle" id="themeToggle" title="Toggle dark mode">
     <span id="themeLabel">Light</span>
     <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -242,7 +242,7 @@ var input          = document.getElementById('searchInput');
 var resultsBox     = document.getElementById('resultsBox');
 var statsLine      = document.getElementById('statsLine');
 var activeTags     = document.getElementById('activeTags');
-var MAX = 300;
+var MAX = 500;
 var sortCol = null, sortDir = 'asc';
 var COL_MAP = {artist:0,title:1,album:2,track:3,genre:4,year:5,length:6,bitrate:7};
 
@@ -495,10 +495,6 @@ function escJs(s){
     rowsHtml+='<div class="result-item" onclick="openModal(\''+escJs(artist)+'\', \''+escJs(title)+'\', \''+escJs(album)+'\')">'
       +'<span class="cell">'+highlightTerms(artist,textTokens)+'</span>'
       +'<span class="cell title-cell" title="'+escHtml(title)+'">'+highlightTerms(title,textTokens)+missingHtml+'</span>'
-
-
-
-
       +'<span class="cell muted col-album">'+highlightTerms(album,textTokens)+'</span>'
       +'<span class="cell muted center col-track">'+escHtml(track)+'</span>'
       +'<span class="cell col-genre">'+(genre?'<span class="genre-badge">'+escHtml(genre)+'</span>':'')+'</span>'
@@ -537,6 +533,29 @@ function applyTheme() {
 }
 applyTheme();
 themeToggle.addEventListener('click', function(){ isDark = !isDark; applyTheme(); });
+
+  document.addEventListener('keydown', function(e) {
+  const key = e.key;
+
+  if (key === 'Escape' || (e.ctrlKey && key.toLowerCase() === 'k')) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('clearBtn').click();
+    return;
+  }
+
+  if (key === 'PageDown' || key === 'PageUp') {
+    const box = document.getElementById('resultsBox');
+    if (!box) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const amount = box.clientHeight * 0.85;
+    box.scrollTop += (key === 'PageDown' ? amount : -amount);
+  }
+}, true);
+
 </script>
 
 <div id="songModal">
