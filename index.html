@@ -101,6 +101,20 @@ hr.filter-divider { border: none; border-top: 0.5px solid var(--border); margin:
   word-break: break-word;
 }
 
+.filter-box.collapsed .filters {
+  display: none;
+}
+
+.filter-box .filter-section-label {
+  cursor: pointer;
+}
+
+.filter-box.collapsed .filter-section-label::after {
+  content: " (tap to expand)";
+  text-transform: none;
+  font-weight: 400;
+  color: var(--text-hint);
+}
 </style>
 </head>
 <body>
@@ -122,7 +136,7 @@ hr.filter-divider { border: none; border-top: 0.5px solid var(--border); margin:
 </div>
 <p class="hint">Mix any terms freely &mdash; e.g. <code>love 1980</code> &nbsp;or&nbsp; <code>beatles rock</code> &nbsp;or&nbsp; <code>christmas jazz 1960</code></p>
 
-<div class="filter-box">
+<div class="filter-box" id="timePeriodBox">
   <div class="filter-section-label">Time period</div>
   <div class="filters">
     <div class="filter-group">
@@ -140,7 +154,7 @@ hr.filter-divider { border: none; border-top: 0.5px solid var(--border); margin:
   </div>
 </div>
 
-<div class="filter-box">
+<div class="filter-box" id="musicBox">
   <div class="filter-section-label">Music</div>
   <div class="filters">
     <div class="filter-group">
@@ -178,7 +192,7 @@ hr.filter-divider { border: none; border-top: 0.5px solid var(--border); margin:
     </div>
   </div>
   </div>
-<div class="filter-box">
+<div class="filter-box" id="dataQualityBox">
   <div class="filter-section-label">Data quality</div>
   <div class="filters">
     <div class="filter-group">
@@ -246,6 +260,13 @@ var activeTags     = document.getElementById('activeTags');
 var MAX = 500;
 var sortCol = null, sortDir = 'asc';
 var COL_MAP = {artist:0,title:1,album:2,track:3,genre:4,year:5,length:6,bitrate:7};
+
+['timePeriodBox', 'musicBox', 'dataQualityBox'].forEach(id => {
+  const box = document.getElementById(id);
+  if (!box) return;
+  const label = box.querySelector('.filter-section-label');
+  label.addEventListener('click', () => box.classList.toggle('collapsed'));
+});
 
 // Populate static dropdowns
 CENTURIES.forEach(function(c){
@@ -472,7 +493,9 @@ function search(){
   var total=matches.length;
   if (total===0){
     resultsBox.innerHTML='<div class="empty">No songs found — try different terms or filters</div>';
-    statsLine.innerHTML='<span>0</span> results'; return;
+    statsLine.innerHTML='<span>0</span> results';
+    setFilterCollapseState();
+    return;
   }
 
   statsLine.innerHTML='<span>'+total.toLocaleString()+'</span> result'+(total!==1?'s':'')+
@@ -524,7 +547,7 @@ function escJs(s){
 
   if (total>MAX) rowsHtml+='<div class="more-notice">+ '+(total-MAX).toLocaleString()+' more — refine your search to narrow results</div>';
   resultsBox.innerHTML=headerHtml+rowsHtml;
-
+  setFilterCollapseState();
   resultsBox.querySelectorAll('.header-row span[data-col]').forEach(function(h){
     h.addEventListener('click',function(){
       var col=h.getAttribute('data-col');
@@ -597,6 +620,22 @@ if (modal && getComputedStyle(modal).display !== 'none' && key === 'Enter') {
     box.scrollTop += (key === 'PageDown' ? amount : -amount);
   }
 }, true);
+
+function isMobileDevice() {
+  return window.matchMedia('(max-width: 700px)').matches ||
+         navigator.maxTouchPoints > 0 ||
+         /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function setFilterCollapseState() {
+  const hasResults = resultsBox.querySelector('.result-item') !== null;
+  const shouldCollapse = isMobileDevice() && hasResults;
+
+  ['timePeriodBox', 'musicBox', 'dataQualityBox'].forEach(id => {
+    const box = document.getElementById(id);
+    if (box) box.classList.toggle('collapsed', shouldCollapse);
+  });
+}
 
 </script>
 
